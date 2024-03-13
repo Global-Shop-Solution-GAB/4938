@@ -1,0 +1,316 @@
+Program.Sub.ScreenSU.Start
+Gui.Form..Create
+Gui.Form..Caption("Build Pay Check File")
+Gui.Form..Size(12360,14340)
+Gui.Form..MinX(0)
+Gui.Form..MinY(0)
+Gui.Form..Position(0,0)
+Gui.Form..BackColor(-2147483633)
+Gui.Form..MousePointer(0)
+Gui.Form..Event(UnLoad,Form_UnLoad)
+Gui.Form.gsCheck.Create(GsGridControl)
+Gui.Form.gsCheck.Size(11925,11295)
+Gui.Form.gsCheck.Position(135,1080)
+Gui.Form.lbl1.Create(Label,"CheckLog",True,1365,255,0,135,795,True,0,"Arial",8,-2147483633,0)
+Gui.Form.cmdFlag.Create(Button)
+Gui.Form.cmdFlag.Size(1245,375)
+Gui.Form.cmdFlag.Position(9450,12495)
+Gui.Form.cmdFlag.Caption("Flag Build")
+Gui.Form.cmdFlag.Event(Click,cmdFlag_Click)
+Gui.Form.cmdBuild.Create(Button)
+Gui.Form.cmdBuild.Size(855,375)
+Gui.Form.cmdBuild.Position(135,13425)
+Gui.Form.cmdBuild.Caption("Build")
+Gui.Form.cmdBuild.Event(Click,cmdBuild_Click)
+Gui.Form.txtLoc.Create(TextBox,"C:\Positive Pay File",True,10965,300,0,135,13020,True,0,"Arial",8,-2147483643,1)
+Gui.Form.dtpBeg.Create(DatePicker)
+Gui.Form.dtpBeg.Size(1935,285)
+Gui.Form.dtpBeg.Position(135,225)
+Gui.Form.dtpEnd.Create(DatePicker)
+Gui.Form.dtpEnd.Size(1935,285)
+Gui.Form.dtpEnd.Position(2445,225)
+Gui.Form.cmdBrowseLoc.Create(Button)
+Gui.Form.cmdBrowseLoc.Size(855,375)
+Gui.Form.cmdBrowseLoc.Position(11190,12975)
+Gui.Form.cmdBrowseLoc.Caption("^")
+Gui.Form.cmdBrowseLoc.Event(Click,cmdBrowseLoc_Click)
+Gui.Form.cmdFind.Create(Button)
+Gui.Form.cmdFind.Size(855,375)
+Gui.Form.cmdFind.Position(4590,180)
+Gui.Form.cmdFind.Caption("Find")
+Gui.Form.cmdFind.Event(Click,cmdFind_Click)
+Gui.Form.cmdAllCheck.Create(Button)
+Gui.Form.cmdAllCheck.Size(1395,375)
+Gui.Form.cmdAllCheck.Position(5595,180)
+Gui.Form.cmdAllCheck.Caption("All Checks Log")
+Gui.Form.cmdAllCheck.Event(Click,cmdAllCheck_Click)
+Gui.Form.cmdUnFlag.Create(Button)
+Gui.Form.cmdUnFlag.Size(1245,375)
+Gui.Form.cmdUnFlag.Position(10800,12480)
+Gui.Form.cmdUnFlag.Caption("UnFlag Build")
+Gui.Form.cmdUnFlag.Event(Click,cmdUnFlag_Click)
+Gui.Form.lbl2.Create(Label,"Output location",True,1935,255,0,150,12795,True,0,"Arial",8,-2147483633,0)
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+v.Global.sWhereClause.Declare(string)
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+'BN Jan 23,2018
+'This project will generate a positive pay file with the Bank ARP Format
+'It will be run on a custom menu item. User will flag the checks, then click Build to generate the file
+'User has to be in POSPAY security group in order to use the program.
+
+F.Intrinsic.Control.SetErrorHandler("Main")
+F.Intrinsic.Control.ClearErrors
+V.Local..BulkDeclareString(sError)
+v.Local.bSecGroup.Declare(boolean)
+
+F.odbc.Connection!con.OpenConnection(V.Ambient.PDSN,V.Ambient.PUser,V.Ambient.PPass,300)
+
+f.Global.Security.IsInGroup(v.Caller.User,"POSPAY",v.Caller.CompanyCode,v.Local.bSecGroup)
+f.Intrinsic.Control.If(v.Local.bSecGroup,=,False)
+	f.Intrinsic.UI.Msgbox("You are not allowed to use this program","Security")
+	f.Intrinsic.Control.ExitSub
+f.Intrinsic.Control.EndIf
+
+v.Global.sWhereClause.Set("")
+f.Intrinsic.Control.CallSub("Bind")
+gui.Form..Show
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("Main")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: ",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+Function.Intrinsic.Control.EndIf
+
+Program.Sub.Main.End
+
+Program.Sub.Bind.Start
+F.Intrinsic.Control.SetErrorHandler("Bind")
+F.Intrinsic.Control.ClearErrors
+V.Local..BulkDeclareString(sError,sSQL)
+
+f.Intrinsic.Control.If(v.DataTable.C.Exists)
+	f.Data.DataTable.Close("C")
+f.Intrinsic.Control.EndIf
+
+f.Intrinsic.String.Build("Select CK_NO, CK_Or_Void, CK_Date, Vend_No, Name_Vendor_Pay as Payee, Amount, substring(CK_Date,6,2) as Ck_M, right(CK_Date,2) as CK_D, substring(CK_Date,3,2) as Ck_Y from V_Checks_Log c join V_Vendor_Pay_To v on c.Vend_No = v.Vendor where Amount > 0 {0} Order by CK_Date,CK_No Asc",v.Global.sWhereClause,v.Local.sSQL)
+f.Data.DataTable.CreateFromSQL("C","con",v.Local.sSQL,True)
+f.Data.DataTable.AddExpressionColumn("C","DateS","String","CK_M + CK_D + CK_Y")
+f.Data.DataTable.AddColumn("C","Build","Boolean","False")
+gui.Form.gsCheck.AddGridviewFromDatatable("GV","C")
+f.Intrinsic.Control.CallSub("Format_grid")
+gui.Form.gsCheck.MainView("GV")
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("Bind")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: ",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+Function.Intrinsic.Control.EndIf
+Program.Sub.Bind.End
+
+Program.Sub.cmdAllCheck_Click.Start
+v.Global.sWhereClause.Set("")
+f.Intrinsic.Control.CallSub("Bind")
+Program.Sub.cmdAllCheck_Click.End
+
+Program.Sub.cmdFind_Click.Start
+F.Intrinsic.Control.SetErrorHandler("cmdFind")
+F.Intrinsic.Control.ClearErrors
+V.Local..BulkDeclareString(sError,sBeg,sEnd)
+
+f.Intrinsic.String.Format(v.Screen.Form!dtpBeg.Value,"YYYY-MM-DD",v.Local.sBeg)
+f.Intrinsic.String.Format(v.Screen.Form!dtpEnd.Value,"YYYY-MM-DD",v.Local.sEnd)
+f.Intrinsic.String.Build("and CK_Date between '{0}' and '{1}'",v.Local.sBeg,v.Local.sEnd,v.Global.sWhereClause)
+f.Intrinsic.Control.CallSub("Bind")
+
+f.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("cmdFind")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: Project",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+Function.Intrinsic.Control.EndIf
+Program.Sub.cmdFind_Click.End
+
+Program.Sub.cmdFlag_Click.Start
+F.Intrinsic.Control.SetErrorHandler("cmdFlag_Click")
+F.Intrinsic.Control.ClearErrors
+V.Local.sError.Declare(String)
+
+F.Data.DataTable.SetValue("C",-1,"Build",True)
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("cmdFlag_Click")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: Project",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+Function.Intrinsic.Control.EndIf
+Program.Sub.cmdFlag_Click.End
+
+Program.Sub.cmdUnFlag_Click.Start
+F.Intrinsic.Control.SetErrorHandler("cmdUnFlag_Click")
+F.Intrinsic.Control.ClearErrors
+V.Local.sError.Declare(String)
+
+F.Data.DataTable.SetValue("C",-1,"Build",False)
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("cmdUnFlag_Click")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: Project",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+Function.Intrinsic.Control.EndIf
+Program.Sub.cmdUnFlag_Click.End
+
+Program.Sub.cmdBrowseLoc_Click.Start
+F.Intrinsic.Control.SetErrorHandler("cmdBrowseLoc_Click")
+F.Intrinsic.Control.ClearErrors
+v.Local..BulkDeclareString(sError,sFolder)
+
+Function.Intrinsic.UI.FolderBrowser("Search Folder", v.Local.sFolder) 
+gui.Form.txtLoc.Text(v.Local.sFolder.Trim)
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("cmdBrowseLoc_Click")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: ",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+Function.Intrinsic.Control.EndIf
+
+Program.Sub.cmdBrowseLoc_Click.End
+
+Program.Sub.cmdBuild_Click.Start
+F.Intrinsic.Control.SetErrorHandler("cmdBuild_Click")
+F.Intrinsic.Control.ClearErrors
+v.Local..BulkDeclareString(sError,sDate,sTime,sLine,sContent,sFileName,sFilePath,sAmount,sMsg)
+v.Local..BulkDeclareLong(i,iUBound)
+
+f.Intrinsic.Control.If(v.DataView.C!DTV.Exists)
+	f.Data.DataView.Close("C","DTV")
+f.Intrinsic.Control.EndIf
+f.Data.DataView.Create("C","DTV",22,"Build = True","")
+
+f.Intrinsic.Control.If(v.DataView.C!DTV.RowCount,=,0)
+	f.Intrinsic.UI.Msgbox("Please flag the check lines to build","No record flagged")
+	f.Intrinsic.Control.ExitSub
+f.Intrinsic.Control.Else
+	f.Intrinsic.String.Format(v.Ambient.Date,"MM-DD-YY",v.Local.sDate)
+	f.Intrinsic.String.Format(v.Ambient.Now,"HhNnSs",v.Local.sTime)
+	f.Intrinsic.String.Build("{0}_{1}.txt",v.Local.sDate,v.Local.sTime,v.Local.sFileName)
+	f.Intrinsic.String.Build("{0}\{1}_{2}.txt",v.Screen.Form!txtLoc.Text.Trim,v.Local.sDate,v.Local.sTime,v.Local.sFilePath)
+	f.Intrinsic.Math.Sub(v.DataView.C!DTV.RowCount,1,v.Local.iUbound)
+	f.Intrinsic.Control.For(v.Local.i,0,v.Local.iUbound,1)
+		v.Local.sAmount.Set(V.DataView.C!DTV(v.Local.i).Amount!FieldValString)
+		f.Intrinsic.String.Replace(v.Local.sAmount,".","",v.Local.sAmount)
+		f.Intrinsic.String.LPad(v.Local.sAmount,"0",10,v.Local.sAmount)
+		f.Intrinsic.String.Build("C028000039421404 RA 0000{0}{1}{2}{3}              {4}",V.DataView.C!DTV(v.Local.i).CK_No!FieldValString,v.Local.sAmount,V.DataView.C!DTV(v.Local.i).DateS!FieldValString,V.DataView.C!DTV(v.Local.i).Vend_No!FieldValString,V.DataView.C!DTV(v.Local.i).Payee!FieldValString,v.Local.sLine)
+		f.Intrinsic.String.Build("{0}{1}{2}",v.Local.sContent,v.Local.sLine,v.Ambient.NewLine,v.Local.sContent)
+	f.Intrinsic.Control.Next(v.Local.i)
+	F.Intrinsic.File.String2File(V.Local.sFilePath,V.Local.sContent)
+	f.Intrinsic.String.Build("File {0} generated in {1}",v.Local.sFileName,v.Screen.Form!txtLoc.Text.Trim,v.Local.sMsg)
+	f.Intrinsic.UI.Msgbox(v.Local.sMsg,"Completed")
+f.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("cmdBuild_Click")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: Project",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+Function.Intrinsic.Control.EndIf
+Program.Sub.cmdBuild_Click.End
+
+Program.Sub.Format_Grid.Start
+F.Intrinsic.Control.SetErrorHandler("Format_grid")
+F.Intrinsic.Control.ClearErrors
+V.Local.sError.Declare(String)
+
+Gui.Form.gsCheck.SuspendLayout()
+Gui.Form.gsCheck.SetGridViewProperty("GV","AllowSort",True)
+Gui.Form.gsCheck.SetGridViewProperty("GV","AllowFilter",True)
+Gui.Form.gsCheck.SetGridViewProperty("GV","Enableappearanceoddrow",True)
+'Gui.Form.gsCheck.SetGridViewProperty("GV","OptionsFindAlwaysVisible",True)
+'Gui.Form.gsCheck.SetGridViewProperty("GV","OptionsViewShowAutoFilterRow",True)
+Gui.Form.gsCheck.SetGridViewProperty("GV","OptionsFilterUseNewCustomFilterDialog",True)
+f.Intrinsic.Control.CallSub(FormatBulk,"GS","gsCheck","GV","GV","sInputColumns","CK_Or_Void,Build","sProperty","Width","sWidth","30")	
+f.Intrinsic.Control.CallSub(FormatBulk,"GS","gsCheck","GV","GV","sInputColumns","CK_No,Vend_No","sProperty","Width","sWidth","50")	
+f.Intrinsic.Control.CallSub(FormatBulk,"GS","gsCheck","GV","GV","sInputColumns","CK_Date","sProperty","Width","sWidth","80")	
+f.Intrinsic.Control.CallSub(FormatBulk,"GS","gsCheck","GV","GV","sInputColumns","Amount","sProperty","Width","sWidth","150")
+f.Intrinsic.Control.CallSub(FormatBulk,"GS","gsCheck","GV","GV","sInputColumns","Build","sProperty","Editable")
+f.Intrinsic.Control.CallSub(FormatBulk,"GS","gsCheck","GV","GV","sInputColumns","CK_M,CK_D,CK_Y,DateS","sProperty","Invisible")
+f.Intrinsic.Control.CallSub(FormatBulk,"GS","gsCheck","GV","GV","sInputColumns","CK_NO@!@Check,CK_Or_Void@!@C/V,CK_Date@!@Check Date,Vend_No@!@Vendor,Payee@!@Name","sProperty","Caption")
+f.Intrinsic.Control.CallSub(FormatBulk,"GS","gsCheck","GV","GV","sInputColumns","Amount","sProperty","HeaderAllign_Far")
+f.Intrinsic.Control.CallSub(FormatBulk,"GS","gsCheck","GV","GV","sInputColumns","CK_Or_Void","sProperty","Invisible")
+Gui.Form.GsCheck.SetColumnProperty("GV","CK_Date","DisplayCustomDatetime","d")
+Gui.Form.gsCheck.ResumeLayout()
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("Format_grid")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: Project",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+Function.Intrinsic.Control.EndIf
+
+Program.Sub.Format_Grid.End
+
+Program.Sub.FormatBulk.Start
+F.Intrinsic.Control.SetErrorHandler("FormatBulk")
+F.Intrinsic.Control.ClearErrors
+v.Local..BulkDeclareString(sError,sColumns,sHold)
+v.Local..BulkDeclareLong(iCnt)
+
+f.Intrinsic.String.Split(v.Args.sInputColumns,",",v.Local.sColumns)
+f.Intrinsic.Control.For(v.Local.iCnt,0,v.Local.sColumns.UBound,1)
+	F.Intrinsic.Control.SelectCase(v.Args.sProperty)
+		F.Intrinsic.Control.Case("Width")
+			gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"MinWidth",v.Args.sWidth)
+			gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"MaxWidth",v.Args.sWidth)	
+		F.Intrinsic.Control.Case("Invisible")
+			gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"Visible",False)
+		F.Intrinsic.Control.Case("Caption")
+			f.Intrinsic.String.Split(v.Local.sColumns(v.Local.iCnt),"@!@",v.Local.sHold)
+			gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sHold(0),"Caption",v.Local.sHold(1))
+		F.Intrinsic.Control.Case("HeaderAllign_Far")
+			gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"HeaderHAlignment","Far")
+		F.Intrinsic.Control.Case("Editable")		
+			gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"AllowEdit","True")
+			gui.Form.[v.Args.GS].SetColumnProperty(v.Args.GV,v.Local.sColumns(v.Local.iCnt),"ReadOnly","False")		
+	F.Intrinsic.Control.EndSelect		
+f.Intrinsic.Control.Next(v.Local.iCnt)
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("FormatBulk")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: Project",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+Function.Intrinsic.Control.EndIf
+Program.Sub.FormatBulk.End
+
+Program.Sub.Form_UnLoad.Start
+F.Intrinsic.Control.SetErrorHandler("Form_Unload")
+F.Intrinsic.Control.ClearErrors
+V.Local.sError.Declare(String)
+
+f.ODBC.Connection!con.Close
+f.Intrinsic.Control.End
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("Form_Unload")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: Project",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+Function.Intrinsic.Control.EndIf
+Program.Sub.Form_UnLoad.End
